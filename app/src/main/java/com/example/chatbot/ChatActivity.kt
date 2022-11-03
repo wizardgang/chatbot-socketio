@@ -5,6 +5,7 @@ import android.util.Log
 import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -22,10 +23,12 @@ class ChatActivity : AppCompatActivity(), View.OnClickListener {
     lateinit var mSocket: Socket;
     lateinit var userName: String;
 
-    val gson: Gson = Gson()
-    val chatList:ArrayList<Message> = arrayListOf()
+    private val gson: Gson = Gson()
+    private val chatList:ArrayList<Message> = arrayListOf()
     lateinit var chatRoomAdapter: ChatRoomAdapter
     lateinit var editText:EditText;
+    lateinit var typingText: TextView;
+    lateinit var txtPartner:TextView;
     lateinit var recyclerView:RecyclerView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +36,9 @@ class ChatActivity : AppCompatActivity(), View.OnClickListener {
         setContentView(R.layout.activity_chatroom)
         userName = "Demo"
         editText = findViewById(R.id.editText)
+        typingText = findViewById(R.id.typing)
+        txtPartner = findViewById(R.id.partnerName)
+        txtPartner.text = userName
         val sendBtn:ImageView = findViewById(R.id.send)
         sendBtn.setOnClickListener{sendMessage()}
         chatRoomAdapter = ChatRoomAdapter(this, chatList);
@@ -41,23 +47,31 @@ class ChatActivity : AppCompatActivity(), View.OnClickListener {
         val layoutManager = LinearLayoutManager(this);
         recyclerView.layoutManager = layoutManager;
         try {
-            mSocket = IO.socket(Constants.BASE_URL)
-            Log.d(TAG,mSocket.id())
+            mSocket = SocketInstance.socket
+            mSocket.connect()
+            mSocket.on(Socket.EVENT_CONNECT,onConnect)
+            mSocket.on(Socket.EVENT_DISCONNECT){
+                runOnUiThread {
+                    typingText.text = resources.getString(R.string.offline_status)
+                }
+            }
+            mSocket.on("reply", onUpdateChat)
         }catch (e:Exception){
             e.printStackTrace()
             Log.e(TAG,"Failed to connect ${e.message}")
         }
-        mSocket.connect()
-        mSocket.on(Socket.EVENT_CONNECT,onConnect)
-        mSocket.on("updateChat", onUpdateChat)
-        //mSocket.on(Socket.EVENT_DISCONNECT,onConnect)
+        initialize()
+    }
+    private fun initialize(){
+        val sendData = IntialData(userName)
+        val jsonData = gson.toJson(sendData)
+        mSocket.emit("initialize", jsonData)
     }
     private fun sendMessage() {
         val content = editText.text.toString()
         val sendData = SendMessage(userName, content)
         val jsonData = gson.toJson(sendData)
-        mSocket.emit("chat_message", jsonData)
-
+        mSocket.emit("new_message", jsonData)
         val message = Message(userName, content, MessageType.CHAT_MINE.index)
         addItemToRecyclerView(message)
     }
@@ -80,27 +94,24 @@ class ChatActivity : AppCompatActivity(), View.OnClickListener {
         }
     }
 
-    val onConnect = Emitter.Listener {
-        val data = IntialData(userName)
-        val jsonData = gson.toJson(data)
-        mSocket.emit("connect",jsonData)
+    private val onConnect = Emitter.Listener {
+        runOnUiThread {
+            if (typingText.text != "Online") {
+
+                typingText.text = resources.getString(R.string.online_status)
+            }
+        }
     }
-//    var onUserLeft = Emitter.Listener {
-//        val leftUserName = it[0] as String
-//        val chat: Message = Message(leftUserName, "", "", MessageType.USER_LEAVE.index)
-//        addItemToRecyclerView(chat)
-//    }
 
     var onUpdateChat = Emitter.Listener {
-        val chat: Message = gson.fromJson(it[0].toString(), Message::class.java)
-        chat.viewType = MessageType.CHAT_PARTNER.index
-        addItemToRecyclerView(chat)
+        if(it.any()) {
+            val chat: Message = gson.fromJson(it[0].toString(), Message::class.java)
+            chat.viewType = MessageType.CHAT_PARTNER.index
+            addItemToRecyclerView(chat)
+        }
     }
     override fun onDestroy() {
         super.onDestroy()
-        val data = IntialData(userName)
-        val jsonData = gson.toJson(data)
-        mSocket.emit("disconnect",jsonData)
         mSocket.disconnect()
     }
 }

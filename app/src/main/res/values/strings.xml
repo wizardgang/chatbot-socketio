@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">Socket.io_Android</string>
+    <string name="app_name">Chat Bot</string>
+    <string name="online_status">Online</string>
+    <string name="offline_status">Offline</string>
 </resources>

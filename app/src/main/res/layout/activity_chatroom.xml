@@ -102,9 +102,8 @@
                 android:layout_marginTop="7dp"
                 android:fontFamily="@font/mont_light"
                 android:layout_gravity="start"
-                android:text="Typing........"
-                android:textSize="12dp"
-                android:visibility="invisible" />
+                android:text="Offline"
+                android:textSize="12dp" />
 
         </LinearLayout>
 
